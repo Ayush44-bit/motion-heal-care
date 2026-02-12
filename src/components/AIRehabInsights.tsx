@@ -1,30 +1,51 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Brain, Loader2, RefreshCw, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
+import { useAnalysisHistory, type AnalysisRecord } from "@/hooks/useAnalysisHistory";
+import AnalysisHistoryDrawer from "@/components/AnalysisHistoryDrawer";
 
 interface AIRehabInsightsProps {
   mode: "patient" | "doctor";
   patientData: Record<string, unknown>;
   title?: string;
   description?: string;
+  contextKey?: string;
 }
 
-const AIRehabInsights = ({ mode, patientData, title, description }: AIRehabInsightsProps) => {
+const AIRehabInsights = ({ mode, patientData, title, description, contextKey }: AIRehabInsightsProps) => {
   const [analysis, setAnalysis] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [hasAnalyzed, setHasAnalyzed] = useState(false);
+  const [historyRecords, setHistoryRecords] = useState<AnalysisRecord[]>([]);
   const { toast } = useToast();
+  const fullTextRef = useRef("");
+
+  const resolvedKey = contextKey || `${mode}-dashboard`;
+  const { getHistory, saveAnalysis, deleteRecord } = useAnalysisHistory(resolvedKey);
 
   const FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-rehab-analysis`;
+
+  const refreshHistory = useCallback(() => {
+    setHistoryRecords(getHistory());
+  }, [getHistory]);
+
+  const handleDelete = useCallback(
+    (id: string) => {
+      deleteRecord(id);
+      refreshHistory();
+    },
+    [deleteRecord, refreshHistory]
+  );
 
   const runAnalysis = useCallback(async () => {
     setIsLoading(true);
     setAnalysis("");
     setHasAnalyzed(true);
+    fullTextRef.current = "";
 
     try {
       const resp = await fetch(FUNCTION_URL, {
@@ -54,7 +75,6 @@ const AIRehabInsights = ({ mode, patientData, title, description }: AIRehabInsig
 
       const decoder = new TextDecoder();
       let buffer = "";
-      let fullText = "";
 
       while (true) {
         const { done, value } = await reader.read();
@@ -73,8 +93,8 @@ const AIRehabInsights = ({ mode, patientData, title, description }: AIRehabInsig
             const parsed = JSON.parse(jsonStr);
             const content = parsed.choices?.[0]?.delta?.content;
             if (content) {
-              fullText += content;
-              setAnalysis(fullText);
+              fullTextRef.current += content;
+              setAnalysis(fullTextRef.current);
             }
           } catch {
             buffer = line + "\n" + buffer;
@@ -82,13 +102,19 @@ const AIRehabInsights = ({ mode, patientData, title, description }: AIRehabInsig
           }
         }
       }
+
+      // Auto-save completed analysis
+      if (fullTextRef.current) {
+        saveAnalysis(mode, fullTextRef.current, patientData);
+        toast({ title: "Analysis saved", description: "This analysis has been saved to your history." });
+      }
     } catch (e) {
       console.error(e);
       toast({ title: "Error", description: "Failed to connect to AI service.", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
-  }, [mode, patientData, FUNCTION_URL, toast]);
+  }, [mode, patientData, FUNCTION_URL, toast, saveAnalysis]);
 
   const defaultTitle = mode === "patient" ? "AI Rehabilitation Assistant" : "AI Clinical Insights";
   const defaultDesc = mode === "patient"
@@ -111,20 +137,27 @@ const AIRehabInsights = ({ mode, patientData, title, description }: AIRehabInsig
               <p className="text-xs text-muted-foreground mt-0.5">{description || defaultDesc}</p>
             </div>
           </div>
-          <Button
-            size="sm"
-            onClick={runAnalysis}
-            disabled={isLoading}
-            variant={hasAnalyzed ? "outline" : "default"}
-          >
-            {isLoading ? (
-              <><Loader2 className="w-3 h-3 animate-spin mr-1" /> Analyzing...</>
-            ) : hasAnalyzed ? (
-              <><RefreshCw className="w-3 h-3 mr-1" /> Re-analyze</>
-            ) : (
-              <><Brain className="w-3 h-3 mr-1" /> Analyze</>
-            )}
-          </Button>
+          <div className="flex items-center gap-2">
+            <AnalysisHistoryDrawer
+              records={historyRecords}
+              onDelete={handleDelete}
+              onRefresh={refreshHistory}
+            />
+            <Button
+              size="sm"
+              onClick={runAnalysis}
+              disabled={isLoading}
+              variant={hasAnalyzed ? "outline" : "default"}
+            >
+              {isLoading ? (
+                <><Loader2 className="w-3 h-3 animate-spin mr-1" /> Analyzing...</>
+              ) : hasAnalyzed ? (
+                <><RefreshCw className="w-3 h-3 mr-1" /> Re-analyze</>
+              ) : (
+                <><Brain className="w-3 h-3 mr-1" /> Analyze</>
+              )}
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent>

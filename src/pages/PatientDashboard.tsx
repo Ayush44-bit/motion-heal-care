@@ -122,6 +122,7 @@ const PatientDashboard = () => {
       {/* AI Rehabilitation Assistant */}
       <AIRehabInsights
         mode="patient"
+        contextKey="patient-dashboard"
         patientData={{
           patientName: user?.name || "Patient",
           lastMobilityScore: 7,
