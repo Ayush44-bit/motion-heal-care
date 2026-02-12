@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Download, MessageSquare } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import AIRehabInsights from "@/components/AIRehabInsights";
+
 
 const mockData = {
   p1: { name: "Sarah Johnson", sessions: 12 },
@@ -119,21 +119,6 @@ const PatientDetail = () => {
           </Table>
         </CardContent>
       </Card>
-
-      {/* AI Clinical Insights for this Patient */}
-      <AIRehabInsights
-        mode="doctor"
-        contextKey={`doctor-patient-${id}`}
-        title={`AI Insights for ${patient.name}`}
-        description="AI-powered analysis of this patient's rehabilitation progress"
-        patientData={{
-          patientName: patient.name,
-          totalSessions: patient.sessions,
-          mobilityTrend: trendData,
-          sessionHistory,
-          latestScore: trendData[trendData.length - 1]?.score,
-        }}
-      />
     </div>
   );
 };

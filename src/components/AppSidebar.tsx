@@ -6,6 +6,7 @@ import {
   LogOut,
   Users,
   FileText,
+  Brain,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
@@ -24,6 +25,7 @@ import {
 
 const patientLinks = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
+  { title: "AI Insights", url: "/ai-insights", icon: Brain },
   { title: "Mobility Session", url: "/mobility", icon: Activity },
   { title: "Chat", url: "/chat", icon: MessageSquare },
   { title: "Profile", url: "/profile", icon: User },
@@ -31,6 +33,7 @@ const patientLinks = [
 
 const doctorLinks = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
+  { title: "AI Insights", url: "/ai-insights", icon: Brain },
   { title: "My Patients", url: "/patients", icon: Users },
   { title: "Reports", url: "/reports", icon: FileText },
   { title: "Chat", url: "/chat", icon: MessageSquare },

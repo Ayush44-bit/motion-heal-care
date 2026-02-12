@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { motion } from "framer-motion";
-import AIRehabInsights from "@/components/AIRehabInsights";
+
 
 const mockTrend = [
   { date: "Jan 5", mobility: 2 },
@@ -118,20 +118,6 @@ const PatientDashboard = () => {
           </CardContent>
         </Card>
       </div>
-
-      {/* AI Rehabilitation Assistant */}
-      <AIRehabInsights
-        mode="patient"
-        contextKey="patient-dashboard"
-        patientData={{
-          patientName: user?.name || "Patient",
-          lastMobilityScore: 7,
-          totalSessions: 12,
-          improvement: "+35%",
-          mobilityTrend: mockTrend,
-          doctorFeedback: "Great progress this week, Sarah! Your wrist extension has improved significantly. Keep focusing on the finger abduction exercises. Let's aim for 3 sessions next week.",
-        }}
-      />
 
       {/* Doctor Feedback */}
       <Card>
