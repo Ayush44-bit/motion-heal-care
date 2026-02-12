@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, Loader2 } from "lucide-react";
+import { Send, Loader2, Check, CheckCheck } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import { supabase } from "@/integrations/supabase/client";
@@ -12,11 +12,11 @@ interface Message {
   text: string;
   sender: "me" | "other";
   timestamp: Date;
+  read_at: Date | null;
 }
 
-// Map mock user IDs to their chat partner
 const CHAT_PAIRS: Record<string, string> = {
-  p1: "d1", // Sarah Johnson <-> Dr. Michael Chen
+  p1: "d1",
   d1: "p1",
 };
 
@@ -25,7 +25,9 @@ const Chat = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(true);
+  const [otherIsTyping, setOtherIsTyping] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const otherName = user?.role === "patient" ? "Dr. Michael Chen" : "Sarah Johnson";
   const myId = user?.id ?? "unknown";
   const otherId = CHAT_PAIRS[myId] ?? (user?.role === "patient" ? "d1" : "p1");
@@ -53,6 +55,7 @@ const Chat = () => {
           text: m.text,
           sender: m.sender_id === myId ? "me" : "other",
           timestamp: new Date(m.created_at),
+          read_at: m.read_at ? new Date(m.read_at) : null,
         }))
       );
     }
@@ -63,7 +66,21 @@ const Chat = () => {
     fetchMessages();
   }, [fetchMessages]);
 
-  // Realtime subscription
+  // Mark incoming messages as read
+  const markMessagesAsRead = useCallback(async () => {
+    await supabase
+      .from("messages")
+      .update({ read_at: new Date().toISOString() })
+      .eq("sender_id", otherId)
+      .eq("receiver_id", myId)
+      .is("read_at", null);
+  }, [myId, otherId]);
+
+  useEffect(() => {
+    markMessagesAsRead();
+  }, [markMessagesAsRead, messages]);
+
+  // Realtime subscription for messages + updates
   useEffect(() => {
     const channel = supabase
       .channel("chat-messages")
@@ -77,8 +94,8 @@ const Chat = () => {
             receiver_id: string;
             text: string;
             created_at: string;
+            read_at: string | null;
           };
-          // Only add if relevant to this conversation
           const isRelevant =
             (m.sender_id === myId && m.receiver_id === otherId) ||
             (m.sender_id === otherId && m.receiver_id === myId);
@@ -93,9 +110,33 @@ const Chat = () => {
                 text: m.text,
                 sender: m.sender_id === myId ? "me" : "other",
                 timestamp: new Date(m.created_at),
+                read_at: m.read_at ? new Date(m.read_at) : null,
               },
             ];
           });
+
+          // Mark as read if it's from the other person
+          if (m.sender_id === otherId) {
+            markMessagesAsRead();
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "messages" },
+        (payload) => {
+          const m = payload.new as {
+            id: string;
+            sender_id: string;
+            read_at: string | null;
+          };
+          if (m.sender_id === myId && m.read_at) {
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === m.id ? { ...msg, read_at: new Date(m.read_at!) } : msg
+              )
+            );
+          }
         }
       )
       .subscribe();
@@ -103,16 +144,74 @@ const Chat = () => {
     return () => {
       supabase.removeChannel(channel);
     };
+  }, [myId, otherId, markMessagesAsRead]);
+
+  // Typing indicator via Presence
+  useEffect(() => {
+    const channel = supabase.channel("typing-presence", {
+      config: { presence: { key: myId } },
+    });
+
+    channel
+      .on("presence", { event: "sync" }, () => {
+        const state = channel.presenceState();
+        const otherPresence = state[otherId];
+        if (otherPresence && Array.isArray(otherPresence)) {
+          const isTyping = otherPresence.some(
+            (p: Record<string, unknown>) => p.typing === true
+          );
+          setOtherIsTyping(isTyping);
+        } else {
+          setOtherIsTyping(false);
+        }
+      })
+      .subscribe(async (status) => {
+        if (status === "SUBSCRIBED") {
+          await channel.track({ typing: false });
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [myId, otherId]);
+
+  // Broadcast typing state
+  const broadcastTyping = useCallback(
+    (isTyping: boolean) => {
+      const channel = supabase.channel("typing-presence", {
+        config: { presence: { key: myId } },
+      });
+      // Track on existing channel
+      supabase
+        .channel("typing-presence")
+        ?.track({ typing: isTyping })
+        .catch(() => {});
+    },
+    [myId]
+  );
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInput(e.target.value);
+
+    broadcastTyping(true);
+
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      broadcastTyping(false);
+    }, 2000);
+  };
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, otherIsTyping]);
 
   const sendMessage = async () => {
     if (!input.trim()) return;
     const text = input.trim();
     setInput("");
+    broadcastTyping(false);
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     await supabase.from("messages").insert({
       sender_id: myId,
       receiver_id: otherId,
@@ -138,7 +237,13 @@ const Chat = () => {
           </div>
           <div>
             <p className="font-medium text-sm text-foreground">{otherName}</p>
-            <p className="text-xs text-muted-foreground">Online</p>
+            <p className="text-xs text-muted-foreground">
+              {otherIsTyping ? (
+                <span className="text-primary font-medium">Typing...</span>
+              ) : (
+                "Online"
+              )}
+            </p>
           </div>
         </div>
 
@@ -153,23 +258,54 @@ const Chat = () => {
               No messages yet. Start the conversation!
             </div>
           ) : (
-            messages.map((msg) => (
-              <div key={msg.id} className={`flex ${msg.sender === "me" ? "justify-end" : "justify-start"}`}>
-                <div
-                  className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm ${
-                    msg.sender === "me"
-                      ? "bg-primary text-primary-foreground rounded-br-md"
-                      : "bg-muted text-foreground rounded-bl-md"
-                  }`}
-                >
-                  <p>{msg.text}</p>
-                  <p className={`text-[10px] mt-1 ${msg.sender === "me" ? "text-primary-foreground/60" : "text-muted-foreground"}`}>
-                    {formatTime(msg.timestamp)}
-                  </p>
+            messages.map((msg, idx) => {
+              // Show read receipt only on the last "me" message that is read
+              const isLastReadMe =
+                msg.sender === "me" &&
+                msg.read_at &&
+                !messages.slice(idx + 1).some((m) => m.sender === "me" && m.read_at);
+
+              return (
+                <div key={msg.id} className={`flex ${msg.sender === "me" ? "justify-end" : "justify-start"}`}>
+                  <div
+                    className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm ${
+                      msg.sender === "me"
+                        ? "bg-primary text-primary-foreground rounded-br-md"
+                        : "bg-muted text-foreground rounded-bl-md"
+                    }`}
+                  >
+                    <p>{msg.text}</p>
+                    <div className={`flex items-center gap-1 mt-1 ${msg.sender === "me" ? "justify-end" : ""}`}>
+                      <p className={`text-[10px] ${msg.sender === "me" ? "text-primary-foreground/60" : "text-muted-foreground"}`}>
+                        {formatTime(msg.timestamp)}
+                      </p>
+                      {msg.sender === "me" && (
+                        msg.read_at ? (
+                          <CheckCheck className="w-3.5 h-3.5 text-primary-foreground/80" />
+                        ) : (
+                          <Check className="w-3 h-3 text-primary-foreground/50" />
+                        )
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+
+          {/* Typing indicator bubble */}
+          {otherIsTyping && (
+            <div className="flex justify-start">
+              <div className="bg-muted text-foreground px-4 py-3 rounded-2xl rounded-bl-md">
+                <div className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-muted-foreground/50 animate-bounce" style={{ animationDelay: "0ms" }} />
+                  <span className="w-2 h-2 rounded-full bg-muted-foreground/50 animate-bounce" style={{ animationDelay: "150ms" }} />
+                  <span className="w-2 h-2 rounded-full bg-muted-foreground/50 animate-bounce" style={{ animationDelay: "300ms" }} />
                 </div>
               </div>
-            ))
+            </div>
           )}
+
           <div ref={bottomRef} />
         </div>
 
@@ -177,7 +313,7 @@ const Chat = () => {
         <div className="p-4 border-t border-border flex gap-2">
           <Input
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={handleInputChange}
             onKeyDown={(e) => e.key === "Enter" && sendMessage()}
             placeholder="Type a message..."
             className="flex-1"
