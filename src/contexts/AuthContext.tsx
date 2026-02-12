@@ -38,6 +38,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (found) {
       setUser(found);
       localStorage.setItem("rehab_user", JSON.stringify(found));
+      localStorage.setItem(`chat_last_viewed_${found.id}`, new Date().toISOString());
     } else {
       // Create a patient user for any email
       const newUser: User = {
@@ -48,6 +49,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
       setUser(newUser);
       localStorage.setItem("rehab_user", JSON.stringify(newUser));
+      localStorage.setItem(`chat_last_viewed_${newUser.id}`, new Date().toISOString());
     }
   }, []);
 
@@ -55,6 +57,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const newUser: User = { id: crypto.randomUUID(), name, email, role };
     setUser(newUser);
     localStorage.setItem("rehab_user", JSON.stringify(newUser));
+    localStorage.setItem(`chat_last_viewed_${newUser.id}`, new Date().toISOString());
   }, []);
 
   const logout = useCallback(() => {
