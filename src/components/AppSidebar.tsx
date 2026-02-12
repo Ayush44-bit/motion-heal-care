@@ -9,8 +9,10 @@ import {
   Brain,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
+import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import {
   Sidebar,
   SidebarContent,
@@ -43,6 +45,7 @@ const doctorLinks = [
 export function AppSidebar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { unreadCount } = useUnreadMessages();
   const links = user?.role === "doctor" ? doctorLinks : patientLinks;
 
   const handleLogout = () => {
@@ -79,7 +82,12 @@ export function AppSidebar() {
                       activeClassName="bg-sidebar-accent text-sidebar-foreground font-medium"
                     >
                       <item.icon className="w-4 h-4" />
-                      <span>{item.title}</span>
+                      <span className="flex-1">{item.title}</span>
+                      {item.title === "Chat" && unreadCount > 0 && (
+                        <Badge variant="destructive" className="h-5 min-w-5 px-1.5 text-[10px] font-bold flex items-center justify-center rounded-full">
+                          {unreadCount > 99 ? "99+" : unreadCount}
+                        </Badge>
+                      )}
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

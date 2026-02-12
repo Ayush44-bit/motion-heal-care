@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Send, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import { supabase } from "@/integrations/supabase/client";
 
 interface Message {
@@ -28,6 +29,12 @@ const Chat = () => {
   const otherName = user?.role === "patient" ? "Dr. Michael Chen" : "Sarah Johnson";
   const myId = user?.id ?? "unknown";
   const otherId = CHAT_PAIRS[myId] ?? (user?.role === "patient" ? "d1" : "p1");
+  const { markAsRead } = useUnreadMessages();
+
+  // Mark messages as read when chat page is opened
+  useEffect(() => {
+    markAsRead();
+  }, [markAsRead]);
 
   // Fetch existing messages
   const fetchMessages = useCallback(async () => {
