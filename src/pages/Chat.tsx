@@ -1,9 +1,10 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send } from "lucide-react";
+import { Send, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Message {
   id: string;
@@ -12,30 +13,104 @@ interface Message {
   timestamp: Date;
 }
 
-const initialMessages: Message[] = [
-  { id: "1", text: "Hi Sarah, how are you feeling after yesterday's session?", sender: "other", timestamp: new Date(Date.now() - 3600000) },
-  { id: "2", text: "Much better, Dr. Chen! My wrist feels more flexible.", sender: "me", timestamp: new Date(Date.now() - 3500000) },
-  { id: "3", text: "That's great to hear! Keep doing the exercises I recommended. Let me know if you experience any pain.", sender: "other", timestamp: new Date(Date.now() - 3400000) },
-];
+// Map mock user IDs to their chat partner
+const CHAT_PAIRS: Record<string, string> = {
+  p1: "d1", // Sarah Johnson <-> Dr. Michael Chen
+  d1: "p1",
+};
 
 const Chat = () => {
   const { user } = useAuth();
-  const [messages, setMessages] = useState<Message[]>(initialMessages);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
   const otherName = user?.role === "patient" ? "Dr. Michael Chen" : "Sarah Johnson";
+  const myId = user?.id ?? "unknown";
+  const otherId = CHAT_PAIRS[myId] ?? (user?.role === "patient" ? "d1" : "p1");
+
+  // Fetch existing messages
+  const fetchMessages = useCallback(async () => {
+    const { data } = await supabase
+      .from("messages")
+      .select("*")
+      .or(
+        `and(sender_id.eq.${myId},receiver_id.eq.${otherId}),and(sender_id.eq.${otherId},receiver_id.eq.${myId})`
+      )
+      .order("created_at", { ascending: true });
+
+    if (data) {
+      setMessages(
+        data.map((m) => ({
+          id: m.id,
+          text: m.text,
+          sender: m.sender_id === myId ? "me" : "other",
+          timestamp: new Date(m.created_at),
+        }))
+      );
+    }
+    setLoading(false);
+  }, [myId, otherId]);
+
+  useEffect(() => {
+    fetchMessages();
+  }, [fetchMessages]);
+
+  // Realtime subscription
+  useEffect(() => {
+    const channel = supabase
+      .channel("chat-messages")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "messages" },
+        (payload) => {
+          const m = payload.new as {
+            id: string;
+            sender_id: string;
+            receiver_id: string;
+            text: string;
+            created_at: string;
+          };
+          // Only add if relevant to this conversation
+          const isRelevant =
+            (m.sender_id === myId && m.receiver_id === otherId) ||
+            (m.sender_id === otherId && m.receiver_id === myId);
+          if (!isRelevant) return;
+
+          setMessages((prev) => {
+            if (prev.some((msg) => msg.id === m.id)) return prev;
+            return [
+              ...prev,
+              {
+                id: m.id,
+                text: m.text,
+                sender: m.sender_id === myId ? "me" : "other",
+                timestamp: new Date(m.created_at),
+              },
+            ];
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [myId, otherId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const sendMessage = () => {
+  const sendMessage = async () => {
     if (!input.trim()) return;
-    setMessages((prev) => [
-      ...prev,
-      { id: crypto.randomUUID(), text: input.trim(), sender: "me", timestamp: new Date() },
-    ]);
+    const text = input.trim();
     setInput("");
+    await supabase.from("messages").insert({
+      sender_id: myId,
+      receiver_id: otherId,
+      text,
+    });
   };
 
   const formatTime = (d: Date) =>
@@ -62,22 +137,32 @@ const Chat = () => {
 
         {/* Messages */}
         <div className="flex-1 overflow-auto p-5 space-y-4">
-          {messages.map((msg) => (
-            <div key={msg.id} className={`flex ${msg.sender === "me" ? "justify-end" : "justify-start"}`}>
-              <div
-                className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm ${
-                  msg.sender === "me"
-                    ? "bg-primary text-primary-foreground rounded-br-md"
-                    : "bg-muted text-foreground rounded-bl-md"
-                }`}
-              >
-                <p>{msg.text}</p>
-                <p className={`text-[10px] mt-1 ${msg.sender === "me" ? "text-primary-foreground/60" : "text-muted-foreground"}`}>
-                  {formatTime(msg.timestamp)}
-                </p>
-              </div>
+          {loading ? (
+            <div className="flex items-center justify-center h-full">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
             </div>
-          ))}
+          ) : messages.length === 0 ? (
+            <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+              No messages yet. Start the conversation!
+            </div>
+          ) : (
+            messages.map((msg) => (
+              <div key={msg.id} className={`flex ${msg.sender === "me" ? "justify-end" : "justify-start"}`}>
+                <div
+                  className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm ${
+                    msg.sender === "me"
+                      ? "bg-primary text-primary-foreground rounded-br-md"
+                      : "bg-muted text-foreground rounded-bl-md"
+                  }`}
+                >
+                  <p>{msg.text}</p>
+                  <p className={`text-[10px] mt-1 ${msg.sender === "me" ? "text-primary-foreground/60" : "text-muted-foreground"}`}>
+                    {formatTime(msg.timestamp)}
+                  </p>
+                </div>
+              </div>
+            ))
+          )}
           <div ref={bottomRef} />
         </div>
 
