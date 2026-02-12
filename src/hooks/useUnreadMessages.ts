@@ -15,6 +15,7 @@ export function useUnreadMessages() {
 
   const fetchCount = useCallback(async () => {
     const lastViewed = localStorage.getItem(`chat_last_viewed_${myId}`);
+    
     let query = supabase
       .from("messages")
       .select("id", { count: "exact", head: true })
@@ -23,10 +24,13 @@ export function useUnreadMessages() {
 
     if (lastViewed) {
       query = query.gt("created_at", lastViewed);
+    } else {
+      // If never viewed, only count recent messages (last message)
+      query = query.order("created_at", { ascending: false }).limit(1);
     }
 
-    const { count: c } = await query;
-    setCount(c ?? 0);
+    const { count: c, data } = await query;
+    setCount(lastViewed ? (c ?? 0) : (data && data.length > 0 ? 1 : 0));
   }, [myId, otherId]);
 
   useEffect(() => {
