@@ -57,10 +57,12 @@ export function useUnreadMessages() {
     };
   }, [myId, otherId]);
 
-  const markAsRead = useCallback(() => {
+  const markAsRead = useCallback(async () => {
     localStorage.setItem(`chat_last_viewed_${myId}`, new Date().toISOString());
     setCount(0);
-  }, [myId]);
+    // Refetch to ensure count is accurate
+    await fetchCount();
+  }, [myId, fetchCount]);
 
   return { unreadCount: count, markAsRead };
 }
