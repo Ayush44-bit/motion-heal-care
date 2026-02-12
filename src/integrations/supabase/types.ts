@@ -18,6 +18,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          read_at: string | null
           receiver_id: string
           sender_id: string
           text: string
@@ -25,6 +26,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          read_at?: string | null
           receiver_id: string
           sender_id: string
           text: string
@@ -32,6 +34,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          read_at?: string | null
           receiver_id?: string
           sender_id?: string
           text?: string
