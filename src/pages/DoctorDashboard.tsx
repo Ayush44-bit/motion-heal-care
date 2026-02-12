@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { motion } from "framer-motion";
-import AIRehabInsights from "@/components/AIRehabInsights";
+
 
 const mockPatients = [
   { id: "p1", name: "Sarah Johnson", lastSession: "Feb 10, 2026", score: 7, trend: "up", sessions: 12 },
@@ -90,23 +90,6 @@ const DoctorDashboard = () => {
           </div>
         </CardContent>
       </Card>
-      {/* AI Clinical Insights */}
-      <AIRehabInsights
-        mode="doctor"
-        contextKey="doctor-dashboard"
-        patientData={{
-          activePatients: mockPatients.length,
-          patients: mockPatients.map((p) => ({
-            name: p.name,
-            lastSession: p.lastSession,
-            score: p.score,
-            trend: p.trend,
-            totalSessions: p.sessions,
-          })),
-          avgImprovement: "+28%",
-          sessionsThisWeek: 8,
-        }}
-      />
     </div>
   );
 };

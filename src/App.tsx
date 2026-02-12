@@ -14,6 +14,7 @@ import Chat from "./pages/Chat";
 import Profile from "./pages/Profile";
 import PatientDetail from "./pages/PatientDetail";
 import Reports from "./pages/Reports";
+import AIInsights from "./pages/AIInsights";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -36,6 +37,7 @@ const App = () => (
             <Route path="/patients/:id" element={<DashboardLayout><PatientDetail /></DashboardLayout>} />
             <Route path="/patients" element={<DashboardLayout><Dashboard /></DashboardLayout>} />
             <Route path="/reports" element={<DashboardLayout><Reports /></DashboardLayout>} />
+            <Route path="/ai-insights" element={<DashboardLayout><AIInsights /></DashboardLayout>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
