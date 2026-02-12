@@ -93,6 +93,7 @@ const DoctorDashboard = () => {
       {/* AI Clinical Insights */}
       <AIRehabInsights
         mode="doctor"
+        contextKey="doctor-dashboard"
         patientData={{
           activePatients: mockPatients.length,
           patients: mockPatients.map((p) => ({

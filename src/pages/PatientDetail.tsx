@@ -123,6 +123,7 @@ const PatientDetail = () => {
       {/* AI Clinical Insights for this Patient */}
       <AIRehabInsights
         mode="doctor"
+        contextKey={`doctor-patient-${id}`}
         title={`AI Insights for ${patient.name}`}
         description="AI-powered analysis of this patient's rehabilitation progress"
         patientData={{
