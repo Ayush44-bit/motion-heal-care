@@ -22,13 +22,17 @@ const Signup = () => {
       toast.error("Please fill in all fields");
       return;
     }
+    if (password.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
     setLoading(true);
     try {
       await signup(name, email, password, role);
-      toast.success("Account created successfully!");
-      navigate("/dashboard");
-    } catch {
-      toast.error("Signup failed");
+      toast.success("Account created! Please check your email to verify your account.");
+      navigate("/login");
+    } catch (err: any) {
+      toast.error(err?.message || "Signup failed");
     } finally {
       setLoading(false);
     }
@@ -81,35 +85,15 @@ const Signup = () => {
 
           <div>
             <Label htmlFor="name">Full Name</Label>
-            <Input
-              id="name"
-              placeholder="John Doe"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="mt-1.5"
-            />
+            <Input id="name" placeholder="John Doe" value={name} onChange={(e) => setName(e.target.value)} className="mt-1.5" />
           </div>
           <div>
             <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="mt-1.5"
-            />
+            <Input id="email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1.5" />
           </div>
           <div>
             <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              type="password"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="mt-1.5"
-            />
+            <Input id="password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1.5" />
           </div>
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? "Creating account..." : "Create Account"}

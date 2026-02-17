@@ -25,8 +25,8 @@ const Login = () => {
       await login(email, password);
       toast.success("Welcome back!");
       navigate("/dashboard");
-    } catch {
-      toast.error("Invalid credentials");
+    } catch (err: any) {
+      toast.error(err?.message || "Invalid credentials");
     } finally {
       setLoading(false);
     }
@@ -60,13 +60,6 @@ const Login = () => {
 
           <h1 className="text-2xl font-bold text-foreground mb-1">Welcome back</h1>
           <p className="text-muted-foreground mb-8">Sign in to your account</p>
-
-          <div className="mb-4 p-3 rounded-lg bg-muted text-xs text-muted-foreground">
-            <p className="font-medium mb-1">Demo accounts:</p>
-            <p>Patient: patient@demo.com</p>
-            <p>Doctor: doctor@demo.com</p>
-            <p className="mt-1">Any password works</p>
-          </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
