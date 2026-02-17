@@ -2,36 +2,30 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
-const CHAT_PAIRS: Record<string, string> = {
-  p1: "d1",
-  d1: "p1",
-};
-
 export function useUnreadMessages() {
   const { user } = useAuth();
   const [count, setCount] = useState(0);
-  const myId = user?.id ?? "unknown";
-  const otherId = CHAT_PAIRS[myId] ?? (user?.role === "patient" ? "d1" : "p1");
+  const myId = user?.id ?? "";
 
   const fetchCount = useCallback(async () => {
+    if (!myId) return;
+
+    // Count all unread messages sent TO me
     const lastViewed = localStorage.getItem(`chat_last_viewed_${myId}`);
-    
+
     let query = supabase
       .from("messages")
       .select("id", { count: "exact", head: true })
-      .eq("sender_id", otherId)
-      .eq("receiver_id", myId);
+      .eq("receiver_id", myId)
+      .is("read_at", null);
 
     if (lastViewed) {
       query = query.gt("created_at", lastViewed);
-    } else {
-      // If never viewed, only count recent messages (last message)
-      query = query.order("created_at", { ascending: false }).limit(1);
     }
 
-    const { count: c, data } = await query;
-    setCount(lastViewed ? (c ?? 0) : (data && data.length > 0 ? 1 : 0));
-  }, [myId, otherId]);
+    const { count: c } = await query;
+    setCount(c ?? 0);
+  }, [myId]);
 
   useEffect(() => {
     fetchCount();
@@ -39,6 +33,7 @@ export function useUnreadMessages() {
 
   // Listen for new messages in realtime
   useEffect(() => {
+    if (!myId) return;
     const channel = supabase
       .channel("unread-count")
       .on(
@@ -46,8 +41,7 @@ export function useUnreadMessages() {
         { event: "INSERT", schema: "public", table: "messages" },
         (payload) => {
           const m = payload.new as { sender_id: string; receiver_id: string };
-          if (m.sender_id === otherId && m.receiver_id === myId) {
-            // Only increment if not currently on chat page
+          if (m.receiver_id === myId && m.sender_id !== myId) {
             if (window.location.pathname !== "/chat") {
               setCount((prev) => prev + 1);
             }
@@ -56,15 +50,12 @@ export function useUnreadMessages() {
       )
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [myId, otherId]);
+    return () => { supabase.removeChannel(channel); };
+  }, [myId]);
 
   const markAsRead = useCallback(async () => {
     localStorage.setItem(`chat_last_viewed_${myId}`, new Date().toISOString());
     setCount(0);
-    // Refetch to ensure count is accurate
     await fetchCount();
   }, [myId, fetchCount]);
 

@@ -1,8 +1,10 @@
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Activity, TrendingUp, Clock, MessageSquare, ArrowRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { motion } from "framer-motion";
 import DoctorSelection from "@/components/DoctorSelection";
@@ -19,6 +21,28 @@ const mockTrend = [
 
 const PatientDashboard = () => {
   const { user } = useAuth();
+  const [doctorName, setDoctorName] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    const fetchDoctor = async () => {
+      const { data: assignments } = await supabase
+        .from("patient_doctor_assignments")
+        .select("doctor_id")
+        .eq("patient_id", user.id)
+        .limit(1);
+
+      if (assignments && assignments.length > 0) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("name")
+          .eq("user_id", assignments[0].doctor_id)
+          .single();
+        setDoctorName(profile?.name || null);
+      }
+    };
+    fetchDoctor();
+  }, [user]);
 
   return (
     <div className="space-y-6">
@@ -74,13 +98,7 @@ const PatientDashboard = () => {
                     fontSize: 13,
                   }}
                 />
-                <Line
-                  type="monotone"
-                  dataKey="mobility"
-                  stroke="hsl(var(--primary))"
-                  strokeWidth={2}
-                  dot={{ fill: "hsl(var(--primary))", r: 4 }}
-                />
+                <Line type="monotone" dataKey="mobility" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ fill: "hsl(var(--primary))", r: 4 }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -104,38 +122,42 @@ const PatientDashboard = () => {
             </div>
           </CardContent>
         </Card>
-        <Card className="hover:shadow-md transition-shadow">
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-semibold text-foreground">Message Doctor</h3>
-                <p className="text-sm text-muted-foreground mt-1">Chat with Dr. Michael Chen</p>
+        {doctorName && (
+          <Card className="hover:shadow-md transition-shadow">
+            <CardContent className="p-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold text-foreground">Message Doctor</h3>
+                  <p className="text-sm text-muted-foreground mt-1">Chat with {doctorName}</p>
+                </div>
+                <Button size="sm" variant="outline" asChild>
+                  <Link to="/chat">
+                    <MessageSquare className="w-3 h-3 mr-1" /> Chat
+                  </Link>
+                </Button>
               </div>
-              <Button size="sm" variant="outline" asChild>
-                <Link to="/chat">
-                  <MessageSquare className="w-3 h-3 mr-1" /> Chat
-                </Link>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Doctor Feedback */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Latest Feedback from Dr. Chen</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="p-4 rounded-lg bg-muted">
-            <p className="text-sm text-foreground leading-relaxed">
-              "Great progress this week, Sarah! Your wrist extension has improved significantly.
-              Keep focusing on the finger abduction exercises. Let's aim for 3 sessions next week."
-            </p>
-            <p className="text-xs text-muted-foreground mt-2">Feb 10, 2026</p>
-          </div>
-        </CardContent>
-      </Card>
+      {doctorName && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Latest Feedback from {doctorName}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="p-4 rounded-lg bg-muted">
+              <p className="text-sm text-foreground leading-relaxed">
+                "Great progress this week! Your wrist extension has improved significantly.
+                Keep focusing on the finger abduction exercises. Let's aim for 3 sessions next week."
+              </p>
+              <p className="text-xs text-muted-foreground mt-2">Feb 10, 2026</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };
