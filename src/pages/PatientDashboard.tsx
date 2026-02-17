@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { motion } from "framer-motion";
-
+import DoctorSelection from "@/components/DoctorSelection";
 
 const mockTrend = [
   { date: "Jan 5", mobility: 2 },
@@ -23,9 +23,11 @@ const PatientDashboard = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Welcome back, {user?.name?.split(" ")[0]}</h1>
+        <h1 className="text-2xl font-bold text-foreground">Welcome back, {user?.name?.split(" ")[0] || "there"}</h1>
         <p className="text-muted-foreground">Here's your rehabilitation overview</p>
       </div>
+
+      <DoctorSelection />
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

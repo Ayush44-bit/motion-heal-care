@@ -1,4 +1,6 @@
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import type { User as SupabaseUser } from "@supabase/supabase-js";
 
 export type UserRole = "patient" | "doctor";
 
@@ -16,57 +18,93 @@ interface AuthContextType {
   signup: (name: string, email: string, password: string, role: UserRole) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
+  loading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-// Mock users for demo
-const MOCK_USERS: User[] = [
-  { id: "p1", name: "Sarah Johnson", email: "patient@demo.com", role: "patient" },
-  { id: "d1", name: "Dr. Michael Chen", email: "doctor@demo.com", role: "doctor" },
-];
+async function buildUser(supabaseUser: SupabaseUser): Promise<User> {
+  // Fetch profile
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("name, avatar_url")
+    .eq("user_id", supabaseUser.id)
+    .single();
+
+  // Fetch role
+  const { data: roleRow } = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", supabaseUser.id)
+    .single();
+
+  return {
+    id: supabaseUser.id,
+    name: profile?.name || supabaseUser.user_metadata?.name || "",
+    email: supabaseUser.email || "",
+    role: (roleRow?.role as UserRole) || "patient",
+    avatar: profile?.avatar_url || undefined,
+  };
+}
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem("rehab_user");
-    return saved ? JSON.parse(saved) : null;
-  });
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const login = useCallback(async (email: string, _password: string) => {
-    // Mock login — replace with real API call
-    const found = MOCK_USERS.find((u) => u.email === email);
-    if (found) {
-      setUser(found);
-      localStorage.setItem("rehab_user", JSON.stringify(found));
-      localStorage.setItem(`chat_last_viewed_${found.id}`, new Date().toISOString());
-    } else {
-      // Create a patient user for any email
-      const newUser: User = {
-        id: crypto.randomUUID(),
-        name: email.split("@")[0],
-        email,
-        role: "patient",
-      };
-      setUser(newUser);
-      localStorage.setItem("rehab_user", JSON.stringify(newUser));
-      localStorage.setItem(`chat_last_viewed_${newUser.id}`, new Date().toISOString());
+  useEffect(() => {
+    // Listen for auth changes FIRST
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        // Use setTimeout to avoid potential Supabase deadlock
+        setTimeout(async () => {
+          const appUser = await buildUser(session.user);
+          setUser(appUser);
+          setLoading(false);
+        }, 0);
+      } else {
+        setUser(null);
+        setLoading(false);
+      }
+    });
+
+    // Then check existing session
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session?.user) {
+        const appUser = await buildUser(session.user);
+        setUser(appUser);
+      }
+      setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const login = useCallback(async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+  }, []);
+
+  const signup = useCallback(async (name: string, email: string, password: string, role: UserRole) => {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { name } },
+    });
+    if (error) throw error;
+
+    // Insert role (the profile is auto-created by the trigger)
+    if (data.user) {
+      await supabase.from("user_roles").insert({ user_id: data.user.id, role });
     }
   }, []);
 
-  const signup = useCallback(async (name: string, email: string, _password: string, role: UserRole) => {
-    const newUser: User = { id: crypto.randomUUID(), name, email, role };
-    setUser(newUser);
-    localStorage.setItem("rehab_user", JSON.stringify(newUser));
-    localStorage.setItem(`chat_last_viewed_${newUser.id}`, new Date().toISOString());
-  }, []);
-
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    await supabase.auth.signOut();
     setUser(null);
-    localStorage.removeItem("rehab_user");
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, login, signup, logout, isAuthenticated: !!user }}>
+    <AuthContext.Provider value={{ user, login, signup, logout, isAuthenticated: !!user, loading }}>
       {children}
     </AuthContext.Provider>
   );
