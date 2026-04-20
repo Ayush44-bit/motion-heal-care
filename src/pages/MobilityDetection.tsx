@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Video, StopCircle, ChevronDown, ChevronUp, Wifi, WifiOff } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useMobilityDetection, MobilityLevel } from "@/hooks/useMobilityDetection";
+import BrunnstromStageCard from "@/components/BrunnstromStageCard";
 
 const levelConfig: Record<MobilityLevel, { label: string; color: string; bg: string }> = {
   full: { label: "Full Movement", color: "text-status-green", bg: "bg-status-green" },
@@ -168,6 +169,8 @@ const MobilityDetection = () => {
           </Card>
         </div>
       </div>
+
+      <BrunnstromStageCard />
     </div>
   );
 };
