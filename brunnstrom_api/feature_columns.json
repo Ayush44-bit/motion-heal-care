@@ -1,0 +1,1 @@
+["rom_index_mcp", "rom_middle_mcp", "rom_thumb_mcp", "mean_velocity", "peak_velocity", "velocity_variance", "mean_palm_acceleration", "mean_dominant_finger_acceleration", "mean_non_target_acceleration", "finger_correlation_score", "unintended_activation_ratio", "stability_score", "tremor_index", "smoothness_index"]
