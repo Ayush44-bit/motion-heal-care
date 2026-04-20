@@ -28,7 +28,7 @@ export interface BrunnstromPrediction {
 
 const API_URL =
   (import.meta.env.VITE_BRUNNSTROM_API_URL as string | undefined) ||
-  "http://localhost:8001";
+  "https://hint-oxygen-quarter-race.trycloudflare.com";
 
 export const useBrunnstromPrediction = () => {
   const [prediction, setPrediction] = useState<BrunnstromPrediction | null>(null);
