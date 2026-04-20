@@ -48,10 +48,15 @@ const MobilityDetection = () => {
           <Card>
             <CardContent className="p-0">
               <div className="relative aspect-video bg-foreground/5 rounded-t-xl overflow-hidden">
-                {state.isActive ? (
-                  <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-full gap-4">
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className={`w-full h-full object-cover ${state.isActive ? "" : "hidden"}`}
+                />
+                {!state.isActive && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center h-full gap-4">
                     <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
                       <Video className="w-8 h-8 text-primary" />
                     </div>
