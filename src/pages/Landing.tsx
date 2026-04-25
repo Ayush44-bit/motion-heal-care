@@ -36,7 +36,7 @@ const Landing = () => {
             <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
               <Activity className="w-4 h-4 text-primary-foreground" />
             </div>
-            <span className="font-bold text-lg text-foreground">RehabVision</span>
+            <span className="font-bold text-lg text-foreground">FlexVision</span>
           </div>
           <div className="flex items-center gap-3">
             <Button variant="ghost" asChild>
@@ -106,7 +106,7 @@ const Landing = () => {
       {/* Footer */}
       <footer className="border-t border-border py-8">
         <div className="max-w-6xl mx-auto px-6 text-center text-sm text-muted-foreground">
-          © 2026 RehabVision. All rights reserved.
+          © 2026 FlexVision. All rights reserved.
         </div>
       </footer>
     </div>

@@ -40,7 +40,7 @@ const Login = () => {
             <div className="w-10 h-10 rounded-lg bg-primary-foreground/20 flex items-center justify-center">
               <Activity className="w-5 h-5 text-primary-foreground" />
             </div>
-            <span className="font-bold text-xl">RehabVision</span>
+            <span className="font-bold text-xl">FlexVision</span>
           </div>
           <h2 className="text-3xl font-bold mb-4">AI-Powered Stroke Rehabilitation</h2>
           <p className="text-primary-foreground/70 leading-relaxed">
@@ -55,7 +55,7 @@ const Login = () => {
             <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
               <Activity className="w-4 h-4 text-primary-foreground" />
             </div>
-            <span className="font-bold text-lg text-foreground">RehabVision</span>
+            <span className="font-bold text-lg text-foreground">FlexVision</span>
           </div>
 
           <h1 className="text-2xl font-bold text-foreground mb-1">Welcome back</h1>

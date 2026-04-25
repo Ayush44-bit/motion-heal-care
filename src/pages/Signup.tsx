@@ -45,7 +45,7 @@ const Signup = () => {
           <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
             <Activity className="w-4 h-4 text-primary-foreground" />
           </div>
-          <span className="font-bold text-lg text-foreground">RehabVision</span>
+          <span className="font-bold text-lg text-foreground">FlexVision</span>
         </div>
 
         <h1 className="text-2xl font-bold text-foreground mb-1">Create account</h1>

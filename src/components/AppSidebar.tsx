@@ -61,7 +61,7 @@ export function AppSidebar() {
             <Activity className="w-4 h-4 text-sidebar-primary-foreground" />
           </div>
           <div>
-            <p className="text-sm font-semibold text-sidebar-foreground">RehabVision</p>
+            <p className="text-sm font-semibold text-sidebar-foreground">FlexVision</p>
             <p className="text-xs text-sidebar-foreground/60 capitalize">{user?.role}</p>
           </div>
         </div>
