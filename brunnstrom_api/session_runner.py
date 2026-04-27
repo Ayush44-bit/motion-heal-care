@@ -75,7 +75,11 @@ def start() -> RunningSession:
         )
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    pre_existing = {p.name for p in OUTPUT_DIR.glob("session_*.xlsx")}
+    pre_existing = {
+        p.name
+        for p in list(OUTPUT_DIR.glob("session_*.xlsx"))
+        + list(OUTPUT_DIR.glob("session_*.csv"))
+    }
 
     creationflags = 0
     preexec_fn = None
@@ -148,12 +152,14 @@ def stop(timeout: float = 25.0) -> Path:
 
     _current = None
 
-    # Find the new xlsx the script just wrote.
+    # Find the new session file the script just wrote (xlsx or csv).
     deadline = time.time() + 5.0
     new_file: Optional[Path] = None
     while time.time() < deadline:
         candidates = [
-            p for p in OUTPUT_DIR.glob("session_*.xlsx")
+            p
+            for p in list(OUTPUT_DIR.glob("session_*.xlsx"))
+            + list(OUTPUT_DIR.glob("session_*.csv"))
             if p.name not in pre_existing
         ]
         if candidates:
@@ -164,7 +170,7 @@ def stop(timeout: float = 25.0) -> Path:
     if new_file is None:
         log_tail = _tail_log(log_path)
         raise FileNotFoundError(
-            f"Session ended but no new session_*.xlsx was written in "
+            f"Session ended but no new session_*.xlsx/.csv was written in "
             f"{OUTPUT_DIR}. The script may have exited before saving."
             f"\nTracker log:\n{log_tail}"
         )
