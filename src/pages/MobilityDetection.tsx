@@ -164,12 +164,12 @@ const MobilityDetection = () => {
                   ) : (
                     <Upload className="w-4 h-4 mr-2" />
                   )}
-                  Upload Excel
+                  Upload CSV
                 </Button>
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".xlsx,.xls"
+                  accept=".csv,text/csv"
                   className="hidden"
                   onChange={handleUpload}
                 />

@@ -274,14 +274,18 @@ def session_stop():
 async def predict_from_excel(file: UploadFile = File(...)):
     try:
         contents = await file.read()
-        df = pd.read_excel(BytesIO(contents))
+        filename = (file.filename or "").lower()
+        if filename.endswith(".csv"):
+            df = pd.read_csv(BytesIO(contents))
+        else:
+            df = pd.read_excel(BytesIO(contents))
         prediction = _predict_from_dataframe(df)
         prediction.excel_filename = file.filename or ""
         return prediction
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Excel prediction failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Prediction failed: {e}")
 
 
 if __name__ == "__main__":
