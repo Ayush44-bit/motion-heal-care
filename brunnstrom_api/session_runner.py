@@ -127,6 +127,7 @@ def stop(timeout: float = 25.0) -> Path:
 
     proc = _current.process
     pre_existing = _current.pre_existing_files
+    log_path = _current.log_path
 
     # Send graceful shutdown so Python raises KeyboardInterrupt and the
     # script's `finally:` block runs (which writes the Excel).
@@ -161,7 +162,7 @@ def stop(timeout: float = 25.0) -> Path:
         time.sleep(0.3)
 
     if new_file is None:
-        log_tail = _tail_log(_current.log_path if _current else OUTPUT_DIR)
+        log_tail = _tail_log(log_path)
         raise FileNotFoundError(
             f"Session ended but no new session_*.xlsx was written in "
             f"{OUTPUT_DIR}. The script may have exited before saving."
