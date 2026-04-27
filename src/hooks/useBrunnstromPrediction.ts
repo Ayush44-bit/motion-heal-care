@@ -44,7 +44,7 @@ export interface SessionPrediction {
 
 export const API_URL =
   (import.meta.env.VITE_BRUNNSTROM_API_URL as string | undefined) ||
-  "https://penny-compromise-backed-volt.trycloudflare.com";
+  "https://trail-gps-flex-formula.trycloudflare.com";
 
 export const useBrunnstromPrediction = () => {
   const [prediction, setPrediction] = useState<BrunnstromPrediction | null>(null);
