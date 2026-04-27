@@ -52,6 +52,12 @@ class RunningSession:
 _current: Optional[RunningSession] = None
 
 
+def _tail_log(path: Path, limit: int = 2500) -> str:
+    if not path.exists():
+        return ""
+    return path.read_text(errors="replace")[-limit:].strip()
+
+
 def is_running() -> bool:
     return _current is not None and _current.process.poll() is None
 
@@ -122,14 +128,14 @@ def stop(timeout: float = 25.0) -> Path:
     proc = _current.process
     pre_existing = _current.pre_existing_files
 
-    # Send graceful shutdown so the script's `finally:` block runs
-    # (which calls session.save_session() and writes the Excel).
+    # Send graceful shutdown so Python raises KeyboardInterrupt and the
+    # script's `finally:` block runs (which writes the Excel).
     if proc.poll() is None:
         try:
             if os.name == "nt":
                 proc.send_signal(signal.CTRL_BREAK_EVENT)  # type: ignore[attr-defined]
             else:
-                os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+                os.killpg(os.getpgid(proc.pid), signal.SIGINT)
         except Exception:
             proc.terminate()
 
@@ -155,9 +161,11 @@ def stop(timeout: float = 25.0) -> Path:
         time.sleep(0.3)
 
     if new_file is None:
+        log_tail = _tail_log(_current.log_path if _current else OUTPUT_DIR)
         raise FileNotFoundError(
             f"Session ended but no new session_*.xlsx was written in "
             f"{OUTPUT_DIR}. The script may have exited before saving."
+            f"\nTracker log:\n{log_tail}"
         )
 
     return new_file
@@ -166,11 +174,13 @@ def stop(timeout: float = 25.0) -> Path:
 def status() -> dict:
     if _current is None:
         return {"running": False}
+    exit_code = _current.process.poll()
     return {
         "running": is_running(),
         "session_id": _current.session_id,
         "started_at": _current.started_at,
         "elapsed_seconds": time.time() - _current.started_at,
         "pid": _current.process.pid,
-        "exit_code": _current.process.poll(),
+        "exit_code": exit_code,
+        "log_tail": _tail_log(_current.log_path) if exit_code is not None else "",
     }
