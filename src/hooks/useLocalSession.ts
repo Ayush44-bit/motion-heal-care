@@ -21,6 +21,15 @@ export const useLocalSession = (
   const [working, setWorking] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const getErrorMessage = async (res: Response, fallback: string) => {
+    try {
+      const data = await res.json();
+      return typeof data.detail === "string" ? data.detail : fallback;
+    } catch {
+      return fallback;
+    }
+  };
+
   // Health check on mount
   useEffect(() => {
     fetch(`${API_URL}/health`)
@@ -32,7 +41,7 @@ export const useLocalSession = (
     setWorking(true);
     try {
       const res = await fetch(`${API_URL}/session/start`, { method: "POST" });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw new Error(await getErrorMessage(res, "Could not start session."));
       const data = await res.json();
       setState((s) => ({
         ...s,
@@ -47,7 +56,8 @@ export const useLocalSession = (
       );
       toast.success("Session started — follow prompts in the Hand Tracker window.");
     } catch (e) {
-      toast.error("Could not start session. Check that the local Python API is running.");
+      const message = e instanceof Error ? e.message : "Check that the local Python API is running.";
+      toast.error(message);
     } finally {
       setWorking(false);
     }
@@ -57,12 +67,13 @@ export const useLocalSession = (
     setWorking(true);
     try {
       const res = await fetch(`${API_URL}/session/stop`, { method: "POST" });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw new Error(await getErrorMessage(res, "Session stopped, but prediction failed."));
       const data: SessionPrediction = await res.json();
       onPrediction(data);
       toast.success(`Session complete — analyzed ${data.trial_count} trials.`);
     } catch (e) {
-      toast.error("Session stopped, but prediction failed. Check the Python API logs.");
+      const message = e instanceof Error ? e.message : "Check the Python API logs.";
+      toast.error(message);
     } finally {
       if (timerRef.current) clearInterval(timerRef.current);
       setState((s) => ({ ...s, isActive: false }));
