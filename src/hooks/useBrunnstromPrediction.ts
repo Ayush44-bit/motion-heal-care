@@ -44,7 +44,7 @@ export interface SessionPrediction {
 
 export const API_URL =
   (import.meta.env.VITE_BRUNNSTROM_API_URL as string | undefined) ||
-  "https://hint-oxygen-quarter-race.trycloudflare.com";
+  "https://penny-compromise-backed-volt.trycloudflare.com";
 
 export const useBrunnstromPrediction = () => {
   const [prediction, setPrediction] = useState<BrunnstromPrediction | null>(null);
