@@ -15,13 +15,20 @@ Deploy:
 
 import json
 import os
-from typing import Dict, List
+from collections import defaultdict
+from io import BytesIO
+from typing import Dict, List, Optional
 
 import joblib
 import numpy as np
-from fastapi import FastAPI, HTTPException
+import pandas as pd
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+
+from session_runner import start as start_session
+from session_runner import status as session_status
+from session_runner import stop as stop_session
 
 # ---------------------------------------------------------------------------
 # Model loading
@@ -99,6 +106,106 @@ class BrunnstromPrediction(BaseModel):
     probabilities: Dict[str, float]
 
 
+class PerMovementPrediction(BaseModel):
+    movement_name: str
+    trial_index: Optional[int] = None
+    stage: int
+    label: str
+    confidence: float
+    probabilities: Dict[str, float]
+
+
+class SessionPrediction(BaseModel):
+    overall: BrunnstromPrediction
+    per_movement: List[PerMovementPrediction]
+    excel_filename: str
+    trial_count: int
+
+
+# ---------------------------------------------------------------------------
+# Shared prediction helpers
+# ---------------------------------------------------------------------------
+def _predict_one(feature_vector: np.ndarray) -> BrunnstromPrediction:
+    pred = int(model.predict(feature_vector)[0])
+    proba_dict: Dict[str, float] = {}
+    confidence = 1.0
+    if hasattr(model, "predict_proba"):
+        proba = model.predict_proba(feature_vector)[0]
+        classes = [int(c) for c in model.classes_]
+        proba_dict = {str(cls): round(float(p), 4) for cls, p in zip(classes, proba)}
+        confidence = round(float(max(proba)), 4)
+    return BrunnstromPrediction(
+        stage=pred,
+        label=STAGE_LABELS.get(pred, f"Stage {pred}"),
+        description=STAGE_DESCRIPTIONS.get(pred, ""),
+        confidence=confidence,
+        probabilities=proba_dict,
+    )
+
+
+def _predict_from_dataframe(df: pd.DataFrame) -> SessionPrediction:
+    missing = [c for c in FEATURE_COLUMNS if c not in df.columns]
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Excel is missing required feature columns: {missing}",
+        )
+
+    rows = df[FEATURE_COLUMNS].to_numpy(dtype=float)
+    if len(rows) == 0:
+        raise HTTPException(status_code=400, detail="Excel contains no trial rows.")
+
+    per_movement: List[PerMovementPrediction] = []
+    weighted_proba: Dict[int, float] = defaultdict(float)
+
+    for i, row in enumerate(rows):
+        x = row.reshape(1, -1)
+        pred = _predict_one(x)
+        movement_name = (
+            str(df.iloc[i].get("movement_name") or df.iloc[i].get("movement_id") or f"trial_{i + 1}")
+        )
+        trial_idx_val = df.iloc[i].get("trial_index")
+        try:
+            trial_idx = int(trial_idx_val) if pd.notna(trial_idx_val) else None
+        except (TypeError, ValueError):
+            trial_idx = None
+
+        per_movement.append(
+            PerMovementPrediction(
+                movement_name=movement_name,
+                trial_index=trial_idx,
+                stage=pred.stage,
+                label=pred.label,
+                confidence=pred.confidence,
+                probabilities=pred.probabilities,
+            )
+        )
+
+        for stage_str, p in pred.probabilities.items():
+            weighted_proba[int(stage_str)] += p
+
+    # Overall = aggregated probabilities across all trials, normalized
+    total = sum(weighted_proba.values()) or 1.0
+    overall_proba = {str(k): round(v / total, 4) for k, v in sorted(weighted_proba.items())}
+    overall_stage = max(weighted_proba, key=weighted_proba.get)
+    overall_conf = round(weighted_proba[overall_stage] / total, 4)
+
+    overall = BrunnstromPrediction(
+        stage=overall_stage,
+        label=STAGE_LABELS.get(overall_stage, f"Stage {overall_stage}"),
+        description=STAGE_DESCRIPTIONS.get(overall_stage, ""),
+        confidence=overall_conf,
+        probabilities=overall_proba,
+    )
+
+    return SessionPrediction(
+        overall=overall,
+        per_movement=per_movement,
+        excel_filename="",
+        trial_count=len(rows),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -117,31 +224,61 @@ def health():
 def predict_brunnstrom(features: BrunnstromFeatures):
     try:
         feature_dict = features.model_dump()
-        # Build feature vector in the exact column order the model was trained on
         x = np.array([[feature_dict[col] for col in FEATURE_COLUMNS]])
-
-        pred = int(model.predict(x)[0])
-
-        # Probabilities (Random Forest supports predict_proba)
-        proba_dict: Dict[str, float] = {}
-        confidence = 1.0
-        if hasattr(model, "predict_proba"):
-            proba = model.predict_proba(x)[0]
-            classes = [int(c) for c in model.classes_]
-            proba_dict = {str(cls): round(float(p), 4) for cls, p in zip(classes, proba)}
-            confidence = round(float(max(proba)), 4)
-
-        return BrunnstromPrediction(
-            stage=pred,
-            label=STAGE_LABELS.get(pred, f"Stage {pred}"),
-            description=STAGE_DESCRIPTIONS.get(pred, ""),
-            confidence=confidence,
-            probabilities=proba_dict,
-        )
+        return _predict_one(x)
     except KeyError as e:
         raise HTTPException(status_code=400, detail=f"Missing feature: {e}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Prediction failed: {e}")
+
+
+# ---------------------------------------------------------------------------
+# Session-driven endpoints (wrap the local OpenCV data acquisition CLI)
+# ---------------------------------------------------------------------------
+@app.post("/session/start")
+def session_start():
+    try:
+        info = start_session()
+        return {
+            "session_id": info.session_id,
+            "started_at": info.started_at,
+            "pid": info.process.pid,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/session/status")
+def session_status_endpoint():
+    return session_status()
+
+
+@app.post("/session/stop", response_model=SessionPrediction)
+def session_stop():
+    try:
+        excel_path = stop_session()
+        df = pd.read_excel(excel_path)
+        prediction = _predict_from_dataframe(df)
+        prediction.excel_filename = excel_path.name
+        return prediction
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Stop/predict failed: {e}")
+
+
+@app.post("/predict-from-excel", response_model=SessionPrediction)
+async def predict_from_excel(file: UploadFile = File(...)):
+    try:
+        contents = await file.read()
+        df = pd.read_excel(BytesIO(contents))
+        prediction = _predict_from_dataframe(df)
+        prediction.excel_filename = file.filename or ""
+        return prediction
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Excel prediction failed: {e}")
 
 
 if __name__ == "__main__":

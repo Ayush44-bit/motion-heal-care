@@ -1,12 +1,23 @@
+import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Activity, Loader2 } from "lucide-react";
-import { useBrunnstromPrediction, type BrunnstromFeatures } from "@/hooks/useBrunnstromPrediction";
+import { Activity, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import {
+  type BrunnstromFeatures,
+  type BrunnstromPrediction,
+  type SessionPrediction,
+  useBrunnstromPrediction,
+} from "@/hooks/useBrunnstromPrediction";
 
 interface Props {
   features?: Partial<BrunnstromFeatures>;
+  /** When provided, the card renders this prediction instead of running the demo predictor. */
+  externalPrediction?: BrunnstromPrediction | null;
+  externalSession?: SessionPrediction | null;
+  loading?: boolean;
+  emptyHint?: string;
 }
 
 const STAGE_COLORS: Record<number, string> = {
@@ -35,8 +46,20 @@ const DEMO_FEATURES: BrunnstromFeatures = {
   smoothness_index: 0.91,
 };
 
-const BrunnstromStageCard = ({ features }: Props) => {
-  const { prediction, loading, predict } = useBrunnstromPrediction();
+const BrunnstromStageCard = ({
+  features,
+  externalPrediction,
+  externalSession,
+  loading: externalLoading,
+  emptyHint,
+}: Props) => {
+  const { prediction: localPrediction, loading: localLoading, predict } = useBrunnstromPrediction();
+  const [showBreakdown, setShowBreakdown] = useState(false);
+
+  // External mode = driven by parent (session flow). Internal mode = demo button.
+  const isExternalMode = externalPrediction !== undefined || externalSession !== undefined;
+  const prediction = isExternalMode ? externalPrediction ?? null : localPrediction;
+  const loading = isExternalMode ? !!externalLoading : localLoading;
 
   const handlePredict = () => {
     predict({ ...DEMO_FEATURES, ...features } as BrunnstromFeatures);
@@ -54,11 +77,23 @@ const BrunnstromStageCard = ({ features }: Props) => {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {!prediction && (
-          <Button onClick={handlePredict} disabled={loading} className="w-full">
-            {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-            {loading ? "Analyzing..." : "Run Brunnstrom Prediction"}
-          </Button>
+        {!prediction && !loading && (
+          isExternalMode ? (
+            <p className="text-sm text-muted-foreground text-center py-6">
+              {emptyHint ?? "Complete a session to see your Brunnstrom recovery stage."}
+            </p>
+          ) : (
+            <Button onClick={handlePredict} disabled={loading} className="w-full">
+              Run Brunnstrom Prediction
+            </Button>
+          )
+        )}
+
+        {loading && (
+          <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Analyzing trial data...
+          </div>
         )}
 
         {prediction && (
@@ -96,9 +131,51 @@ const BrunnstromStageCard = ({ features }: Props) => {
               ))}
             </div>
 
-            <Button variant="outline" size="sm" onClick={handlePredict} disabled={loading} className="w-full">
-              {loading ? "Re-analyzing..." : "Re-run Prediction"}
-            </Button>
+            {externalSession && externalSession.per_movement.length > 0 && (
+              <div className="border-t pt-3">
+                <button
+                  onClick={() => setShowBreakdown((v) => !v)}
+                  className="flex items-center justify-between w-full text-sm font-medium"
+                >
+                  <span>
+                    Per-movement breakdown ({externalSession.trial_count} trials)
+                  </span>
+                  {showBreakdown ? (
+                    <ChevronUp className="w-4 h-4" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4" />
+                  )}
+                </button>
+                {showBreakdown && (
+                  <div className="mt-3 space-y-2 max-h-64 overflow-y-auto">
+                    {externalSession.per_movement.map((m, i) => (
+                      <div
+                        key={`${m.movement_name}-${i}`}
+                        className="flex items-center justify-between gap-2 text-sm border-b border-border pb-2 last:border-0"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium truncate capitalize">
+                            {m.movement_name.replace(/_/g, " ")}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {Math.round(m.confidence * 100)}% confidence
+                          </p>
+                        </div>
+                        <Badge className={STAGE_COLORS[m.stage] || ""}>
+                          Stage {m.stage}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!isExternalMode && (
+              <Button variant="outline" size="sm" onClick={handlePredict} disabled={loading} className="w-full">
+                Re-run Prediction
+              </Button>
+            )}
           </>
         )}
       </CardContent>

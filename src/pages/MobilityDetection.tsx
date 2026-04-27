@@ -1,181 +1,235 @@
-import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useRef, useState } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Video, StopCircle, ChevronDown, ChevronUp, Wifi, WifiOff } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
-import { useMobilityDetection, MobilityLevel } from "@/hooks/useMobilityDetection";
+import {
+  Activity,
+  FileSpreadsheet,
+  Loader2,
+  Monitor,
+  PlayCircle,
+  StopCircle,
+  Upload,
+  Wifi,
+  WifiOff,
+} from "lucide-react";
+import { motion } from "framer-motion";
 import BrunnstromStageCard from "@/components/BrunnstromStageCard";
+import {
+  useBrunnstromPrediction,
+  type SessionPrediction,
+} from "@/hooks/useBrunnstromPrediction";
+import { useLocalSession } from "@/hooks/useLocalSession";
 
-const levelConfig: Record<MobilityLevel, { label: string; color: string; bg: string }> = {
-  full: { label: "Full Movement", color: "text-status-green", bg: "bg-status-green" },
-  partial: { label: "Partial Movement", color: "text-status-yellow", bg: "bg-status-yellow" },
-  minimal: { label: "Minimal Movement", color: "text-status-red", bg: "bg-status-red" },
-  none: { label: "No Movement Detected", color: "text-status-red", bg: "bg-status-red" },
-};
+const formatTime = (s: number) =>
+  `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 
 const MobilityDetection = () => {
-  const { videoRef, canvasRef, state, startSession, stopSession } = useMobilityDetection();
-  const [showAngles, setShowAngles] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const {
+    prediction,
+    session,
+    loading: predicting,
+    predictFromExcel,
+    setSessionPrediction,
+    reset,
+  } = useBrunnstromPrediction();
 
-  const formatTime = (s: number) =>
-    `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+  const handlePrediction = (data: SessionPrediction) => setSessionPrediction(data);
 
-  const config = levelConfig[state.mobilityLevel];
+  const { state, working, startSession, stopSession } = useLocalSession(handlePrediction);
+  const [uploading, setUploading] = useState(false);
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    await predictFromExcel(file);
+    setUploading(false);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
 
   return (
     <div className="space-y-6">
-      {/* Hidden canvas for frame capture */}
-      <canvas ref={canvasRef} className="hidden" />
-
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Mobility Detection</h1>
-          <p className="text-muted-foreground">Real-time hand mobility analysis</p>
+          <p className="text-muted-foreground">
+            Protocol-driven hand assessment for Brunnstrom staging
+          </p>
         </div>
         <Badge variant={state.backendConnected ? "default" : "secondary"} className="gap-1.5">
           {state.backendConnected ? (
-            <><Wifi className="w-3 h-3" /> Backend Connected</>
+            <><Wifi className="w-3 h-3" /> Local API Connected</>
           ) : (
-            <><WifiOff className="w-3 h-3" /> Mock Mode</>
+            <><WifiOff className="w-3 h-3" /> API Offline</>
           )}
         </Badge>
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
-        {/* Video Feed */}
-        <div className="lg:col-span-2">
+        {/* Session control */}
+        <div className="lg:col-span-2 space-y-6">
           <Card>
-            <CardContent className="p-0">
-              <div className="relative aspect-video bg-foreground/5 rounded-t-xl overflow-hidden">
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className={`w-full h-full object-cover ${state.isActive ? "" : "hidden"}`}
-                />
-                {!state.isActive && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center h-full gap-4">
-                    <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-                      <Video className="w-8 h-8 text-primary" />
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Monitor className="w-5 h-5 text-primary" /> Local Data Acquisition
+              </CardTitle>
+              <CardDescription>
+                The clinical-grade hand tracker runs on your local device. Follow the
+                on-screen prompts in the <strong>Hand Movement Tracker</strong> window
+                that opens on your computer.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="relative aspect-video bg-foreground/5 rounded-lg overflow-hidden flex items-center justify-center">
+                {state.isActive ? (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="text-center space-y-4"
+                  >
+                    <div className="relative inline-block">
+                      <div className="w-20 h-20 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                        <Activity className="w-10 h-10 text-emerald-500" />
+                      </div>
+                      <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 animate-pulse" />
                     </div>
-                    <p className="text-muted-foreground text-sm">Click Start to begin your session</p>
-                  </div>
-                )}
-                {state.isActive && (
-                  <>
-                    <div className="absolute top-4 left-4 bg-foreground/70 text-background px-3 py-1 rounded-full text-sm font-mono">
+                    <div>
+                      <p className="font-semibold text-foreground">Session in progress</p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Follow prompts in the tracker window on your computer
+                      </p>
+                    </div>
+                    <div className="font-mono text-3xl font-bold tracking-wider">
                       {formatTime(state.elapsed)}
                     </div>
-                    {!state.handDetected && state.backendConnected && (
-                      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-destructive/90 text-destructive-foreground px-4 py-2 rounded-lg text-sm">
-                        No hand detected — ensure your hand is visible
-                      </div>
+                    {state.sessionId && (
+                      <p className="text-xs text-muted-foreground font-mono">
+                        {state.sessionId}
+                      </p>
                     )}
-                  </>
+                  </motion.div>
+                ) : (
+                  <div className="text-center space-y-3">
+                    <div className="w-16 h-16 mx-auto rounded-full bg-primary/10 flex items-center justify-center">
+                      <PlayCircle className="w-8 h-8 text-primary" />
+                    </div>
+                    <p className="text-muted-foreground text-sm max-w-sm">
+                      Click <strong>Start Session</strong> to launch the protocol-driven
+                      assessment on your local device
+                    </p>
+                  </div>
                 )}
               </div>
-              <div className="p-4 flex gap-3">
+
+              <div className="flex flex-col sm:flex-row gap-3">
                 {!state.isActive ? (
-                  <Button onClick={startSession} className="flex-1">
-                    <Video className="w-4 h-4 mr-2" /> Start Session
+                  <Button
+                    onClick={startSession}
+                    disabled={working || !state.backendConnected}
+                    className="flex-1"
+                  >
+                    {working ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <PlayCircle className="w-4 h-4 mr-2" />
+                    )}
+                    Start Session
                   </Button>
                 ) : (
-                  <Button onClick={stopSession} variant="destructive" className="flex-1">
-                    <StopCircle className="w-4 h-4 mr-2" /> End Session
+                  <Button
+                    onClick={stopSession}
+                    disabled={working}
+                    variant="destructive"
+                    className="flex-1"
+                  >
+                    {working ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <StopCircle className="w-4 h-4 mr-2" />
+                    )}
+                    End Session & Analyze
                   </Button>
                 )}
+
+                <Button
+                  variant="outline"
+                  disabled={state.isActive || uploading || predicting}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex-1 sm:flex-none"
+                >
+                  {uploading ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Upload className="w-4 h-4 mr-2" />
+                  )}
+                  Upload Excel
+                </Button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".xlsx,.xls"
+                  className="hidden"
+                  onChange={handleUpload}
+                />
               </div>
+
+              {!state.backendConnected && (
+                <p className="text-xs text-muted-foreground">
+                  Local API offline. Start the FastAPI server (and cloudflared tunnel) on
+                  your computer to enable session control.
+                </p>
+              )}
             </CardContent>
           </Card>
         </div>
 
-        {/* Status Panel */}
+        {/* Session info panel */}
         <div className="space-y-4">
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">Mobility Status</CardTitle>
+              <CardTitle className="text-base flex items-center gap-2">
+                <FileSpreadsheet className="w-4 h-4 text-primary" /> Session Summary
+              </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="text-center">
-                <motion.div
-                  key={state.mobilityLevel}
-                  initial={{ scale: 0.8, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  className={`w-20 h-20 rounded-full mx-auto flex items-center justify-center ${config.bg}`}
-                >
-                  <span className="text-2xl font-bold text-background">{state.mobilityScore}</span>
-                </motion.div>
-                <p className={`mt-3 font-semibold ${config.color}`}>{config.label}</p>
-                <p className="text-xs text-muted-foreground mt-1">Score: {state.mobilityScore}/10</p>
-                {state.backendConnected && state.isActive && (
-                  <p className="text-xs text-muted-foreground">
-                    Confidence: {Math.round(state.confidence * 100)}%
-                  </p>
-                )}
+            <CardContent className="space-y-3 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Status</span>
+                <span className="font-medium">
+                  {state.isActive
+                    ? "Recording"
+                    : session
+                      ? "Analyzed"
+                      : "Idle"}
+                </span>
               </div>
-
-              {/* Legend */}
-              <div className="space-y-2 pt-2 border-t border-border">
-                {(["full", "partial", "minimal"] as MobilityLevel[]).map((level) => (
-                  <div key={level} className="flex items-center gap-2">
-                    <div className={`w-2.5 h-2.5 rounded-full ${levelConfig[level].bg}`} />
-                    <span className="text-xs text-muted-foreground">{levelConfig[level].label}</span>
-                  </div>
-                ))}
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Trials analyzed</span>
+                <span className="font-medium">{session?.trial_count ?? "—"}</span>
               </div>
-            </CardContent>
-          </Card>
-
-          {/* Joint Angles */}
-          <Card>
-            <CardHeader className="pb-2">
-              <button
-                onClick={() => setShowAngles(!showAngles)}
-                className="flex items-center justify-between w-full"
-              >
-                <CardTitle className="text-base">Joint Angles</CardTitle>
-                {showAngles ? (
-                  <ChevronUp className="w-4 h-4 text-muted-foreground" />
-                ) : (
-                  <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                )}
-              </button>
-            </CardHeader>
-            <AnimatePresence>
-              {showAngles && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: "auto", opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                >
-                  <CardContent className="pt-0">
-                    <div className="space-y-2">
-                      {Object.entries(state.angles).length > 0 ? (
-                        Object.entries(state.angles).map(([key, val]) => (
-                          <div key={key} className="flex justify-between text-sm">
-                            <span className="text-muted-foreground capitalize">
-                              {key.replace(/_/g, " ")}
-                            </span>
-                            <span className="font-mono text-foreground">{val}°</span>
-                          </div>
-                        ))
-                      ) : (
-                        <p className="text-xs text-muted-foreground">
-                          Start a session to see joint angles
-                        </p>
-                      )}
-                    </div>
-                  </CardContent>
-                </motion.div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Source file</span>
+                <span className="font-mono text-xs truncate max-w-[140px]">
+                  {session?.excel_filename ?? "—"}
+                </span>
+              </div>
+              {(prediction || session) && (
+                <Button variant="ghost" size="sm" onClick={reset} className="w-full mt-2">
+                  Clear results
+                </Button>
               )}
-            </AnimatePresence>
+            </CardContent>
           </Card>
         </div>
       </div>
 
-      <BrunnstromStageCard />
+      <BrunnstromStageCard
+        externalPrediction={prediction}
+        externalSession={session}
+        loading={predicting || working}
+        emptyHint="Run a session or upload an Excel file from a previous session to see your Brunnstrom recovery stage."
+      />
     </div>
   );
 };
