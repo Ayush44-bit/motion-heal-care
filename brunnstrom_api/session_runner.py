@@ -45,6 +45,7 @@ class RunningSession:
     process: subprocess.Popen
     started_at: float
     session_id: str  # best-effort placeholder; real id is in the produced filename
+    log_path: Path
     pre_existing_files: set = field(default_factory=set)
 
 
@@ -78,17 +79,32 @@ def start() -> RunningSession:
     else:
         preexec_fn = os.setsid  # new process group so we can signal it cleanly
 
-    proc = subprocess.Popen(
-        [PYTHON_EXE, "main.py"],
-        cwd=str(DATA_ACQ_DIR),
-        creationflags=creationflags,
-        preexec_fn=preexec_fn,
-    )
+    session_id = time.strftime("session_%Y%m%d_%H%M%S")
+    log_path = OUTPUT_DIR / f"{session_id}_tracker.log"
+
+    with open(log_path, "a", buffering=1) as log_file:
+        proc = subprocess.Popen(
+            [PYTHON_EXE, "main.py"],
+            cwd=str(DATA_ACQ_DIR),
+            creationflags=creationflags,
+            preexec_fn=preexec_fn,
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+        )
+
+    time.sleep(1.0)
+    if proc.poll() is not None:
+        error_tail = log_path.read_text(errors="replace")[-2000:].strip()
+        raise RuntimeError(
+            "Data acquisition tracker exited immediately. "
+            f"Log: {log_path}\n{error_tail}"
+        )
 
     _current = RunningSession(
         process=proc,
         started_at=time.time(),
-        session_id=time.strftime("session_%Y%m%d_%H%M%S"),
+        session_id=session_id,
+        log_path=log_path,
         pre_existing_files=pre_existing,
     )
     return _current
