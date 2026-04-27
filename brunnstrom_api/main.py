@@ -256,10 +256,13 @@ def session_status_endpoint():
 @app.post("/session/stop", response_model=SessionPrediction)
 def session_stop():
     try:
-        excel_path = stop_session()
-        df = pd.read_excel(excel_path)
+        session_path = stop_session()
+        if session_path.suffix.lower() == ".csv":
+            df = pd.read_csv(session_path)
+        else:
+            df = pd.read_excel(session_path)
         prediction = _predict_from_dataframe(df)
-        prediction.excel_filename = excel_path.name
+        prediction.excel_filename = session_path.name
         return prediction
     except HTTPException:
         raise
